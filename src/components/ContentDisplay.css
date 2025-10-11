@@ -1,0 +1,76 @@
+/* ContentDisplay Component Styles */
+
+@keyframes progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.navigation:hover {
+  opacity: 1 !important;
+}
+
+.navButton:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.1);
+}
+
+.navButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.navButton:active {
+  transform: scale(0.95);
+}
+
+/* Content transitions */
+.content-fade-enter {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.content-fade-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: all 0.3s ease-in-out;
+}
+
+.content-fade-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.content-fade-exit-active {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 0.3s ease-in-out;
+}
+
+/* Progress bar animation */
+.progress-fill {
+  animation: progress linear forwards;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .navigation {
+    padding: 10px !important;
+    gap: 10px !important;
+  }
+  
+  .navButton {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 18px !important;
+  }
+  
+  .progressDot {
+    width: 8px !important;
+    height: 8px !important;
+  }
+}
