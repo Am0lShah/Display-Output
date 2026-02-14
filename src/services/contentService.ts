@@ -5,10 +5,10 @@ export class ContentService {
   // Get content for current device
   static async getDeviceContent(): Promise<Content[]> {
     const deviceId = DeviceService.getDeviceId();
-    
+
     try {
       console.log('Fetching content for device:', deviceId);
-      
+
       const { data, error } = await supabase
         .from('device_content')
         .select(`
@@ -23,15 +23,15 @@ export class ContentService {
         console.error('Supabase error fetching device content:', error);
         throw error;
       }
-      
+
       console.log('Raw device content data:', data);
-      
+
       const content = data
         ?.map(item => item.content)
         .filter(Boolean) as Content[] || [];
-        
+
       console.log('Processed content for display:', content);
-      
+
       return content;
     } catch (error) {
       console.error('Error fetching device content:', error);
@@ -42,14 +42,34 @@ export class ContentService {
   // Subscribe to real-time content updates
   static subscribeToContentUpdates(callback: (content: Content[]) => void) {
     const deviceId = DeviceService.getDeviceId();
-    
+
     console.log('🔔 Setting up real-time subscription for device:', deviceId);
-    
+
     // Create a unique channel for this device
     const channelName = `content-updates-${deviceId}-${Date.now()}`;
     const channel = supabase.channel(channelName);
-    
-    // Subscribe to device_content changes (INSERT, UPDATE, DELETE)
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const fetchAndCallback = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const content = await this.getDeviceContent();
+          console.log('📦 Realtime Update: Fetched specific content:', content.length, 'items');
+          callback(content);
+        } catch (error) {
+          console.error('❌ Error fetching content after update:', error);
+        }
+      }, 500); // Debounce for 500ms
+    };
+
+    // Listen for CHANGES to the link table (device_content)
+    // This handles:
+    // 1. Content added to device (INSERT)
+    // 2. Content removed from device (DELETE)
+    // 3. Order changed or Active status changed (UPDATE)
     channel.on(
       'postgres_changes',
       {
@@ -58,57 +78,40 @@ export class ContentService {
         table: 'device_content',
         filter: `device_id=eq.${deviceId}`,
       },
-      async (payload) => {
-        console.log('🔄 Device content change detected:', payload.eventType, payload);
-        
-        // Immediate callback with slight delay for database consistency
-        setTimeout(async () => {
-          try {
-            const content = await this.getDeviceContent();
-            console.log('📦 Fetched updated content:', content.length, 'items');
-            callback(content);
-          } catch (error) {
-            console.error('❌ Error fetching content after update:', error);
-          }
-        }, 200);
+      (payload) => {
+        console.log('🔄 Device Content Change:', payload.eventType);
+        fetchAndCallback();
       }
     );
-    
-    // Also listen for content table changes (for deletions/updates)
+
+    // Listen for CHANGES to the actual content (title, file_url, etc.)
+    // We only care if the content items LINKED to this device are updated.
+    // However, Supabase RLS limits what we see. 
+    // Optimization: Only listen for UPDATE (unlikely to need INSERT/DELETE here as that's handled by device_content usually)
+    // But if a user deletes a content item globally, it cascades.
     channel.on(
       'postgres_changes',
       {
-        event: '*',
+        event: '*', // Listen to all, but Filter logic is hard without join.
         schema: 'public',
         table: 'content',
       },
-      async (payload) => {
-        console.log('📝 Content table change detected:', payload.eventType, payload);
-        
-        // Only refetch if content was deactivated or updated
-        if (payload.eventType === 'UPDATE' && payload.new && payload.old) {
-          if (payload.new.is_active !== payload.old.is_active) {
-            setTimeout(async () => {
-              try {
-                const content = await this.getDeviceContent();
-                console.log('📦 Fetched content after content update:', content.length, 'items');
-                callback(content);
-              } catch (error) {
-                console.error('❌ Error fetching content after content update:', error);
-              }
-            }, 200);
-          }
-        }
+      (payload) => {
+        // Optimization: We could check if the ID is in our current list, but for now, 
+        // let's just refresh. The excessive load came from polling, not this.
+        // And since we debounce, multiple updates won't kill us.
+        console.log('📝 Global Content Change:', payload.eventType);
+        fetchAndCallback();
       }
     );
-    
+
     // Subscribe and handle connection status
     const subscription = channel.subscribe((status, err) => {
       console.log('🔗 Subscription status:', status);
       if (err) {
         console.error('❌ Subscription error:', err);
       }
-      
+
       if (status === 'SUBSCRIBED') {
         console.log('✅ Real-time subscription active for device:', deviceId);
       } else if (status === 'CHANNEL_ERROR') {
@@ -119,7 +122,7 @@ export class ContentService {
         }, 5000);
       }
     });
-    
+
     return subscription;
   }
 
@@ -175,7 +178,7 @@ export class ContentService {
       // Only fetch from database if cache is invalid or empty
       const freshContent = await this.getDeviceContent();
       console.log('Fresh content fetched:', freshContent.length, 'items');
-      
+
       if (freshContent.length > 0) {
         console.log('Using fresh content from database');
         this.cacheContent(freshContent);
@@ -183,7 +186,7 @@ export class ContentService {
       }
     } catch (error) {
       console.error('Error fetching fresh content:', error);
-      
+
       // Try cached content even if expired in case of network issues
       const cachedContent = this.getCachedContent();
       if (cachedContent.length > 0) {
@@ -238,7 +241,7 @@ export class ContentService {
 
   // Preload media content
   static async preloadMedia(content: Content[]): Promise<void> {
-    const mediaContent = content.filter(c => 
+    const mediaContent = content.filter(c =>
       (c.content_type === 'image' || c.content_type === 'video') && c.file_url
     );
 

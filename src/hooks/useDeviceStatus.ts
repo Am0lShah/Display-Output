@@ -12,19 +12,19 @@ export const useDeviceStatus = () => {
     const initializeDevice = async () => {
       try {
         setLoading(true);
-        
+
         // Register device
         await DeviceService.registerDevice();
-        
+
         // Check pairing status
         const paired = await DeviceService.isDevicePaired();
         setIsPaired(paired);
-        
+
         if (paired) {
           const deviceInfo = await DeviceService.getDeviceInfo();
           setDevice(deviceInfo);
         }
-        
+
         setIsOnline(navigator.onLine);
       } catch (error) {
         console.error('Error initializing device:', error);
@@ -33,82 +33,61 @@ export const useDeviceStatus = () => {
       }
     };
 
-    const updateStatus = async () => {
-      try {
-        if (navigator.onLine) {
-          await DeviceService.updateDeviceStatus(true);
-          
-          // Check if pairing status changed
-          const paired = await DeviceService.isDevicePaired();
-          if (paired !== isPaired) {
-            setIsPaired(paired);
-            
-            if (paired) {
-              const deviceInfo = await DeviceService.getDeviceInfo();
-              setDevice(deviceInfo);
-            } else {
-              setDevice(null);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error updating device status:', error);
+    // Subscribe to pairing changes (Realtime Push)
+    const pairingSubscription = DeviceService.subscribeToDevicePairing((paired, deviceInfo) => {
+      setIsPaired(paired);
+      if (paired && deviceInfo) {
+        setDevice(deviceInfo);
+      } else {
+        setDevice(null);
       }
-    };
+    });
 
-    initializeDevice();
-    
-    // Update device status periodically
-    const statusInterval = setInterval(updateStatus, 30000); // Every 30 seconds
-    
+    // Update device status (Heartbeat) periodically
+    // We ONLY send the heartbeat here, we do NOT check for pairing status (GET request)
+    const statusInterval = setInterval(() => {
+      // Use the optimized updateStatus defined outside
+      updateStatus();
+    }, 60000); // Increased to 60 seconds to save API calls
+
     // Handle page visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         updateStatus();
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     // Handle online/offline events
     const handleOnline = () => {
       setIsOnline(true);
       updateStatus();
     };
-    
+
     const handleOffline = () => {
       setIsOnline(false);
       DeviceService.updateDeviceStatus(false);
     };
-    
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
     return () => {
       clearInterval(statusInterval);
+      pairingSubscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, [isPaired]);
 
+  // Optimized: Only sends Heartbeat (PATCH), does not fetch data (GET)
   const updateStatus = async () => {
     try {
       if (navigator.onLine) {
         await DeviceService.updateDeviceStatus(true);
-        
-        // Check if pairing status changed
-        const paired = await DeviceService.isDevicePaired();
-        if (paired !== isPaired) {
-          setIsPaired(paired);
-          
-          if (paired) {
-            const deviceInfo = await DeviceService.getDeviceInfo();
-            setDevice(deviceInfo);
-          } else {
-            setDevice(null);
-          }
-        }
+        // Pairing check removed - handled by Realtime subscription
       }
     } catch (error) {
       console.error('Error updating device status:', error);
