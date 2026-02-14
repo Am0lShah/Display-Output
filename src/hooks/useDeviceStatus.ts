@@ -33,6 +33,10 @@ export const useDeviceStatus = () => {
       }
     };
 
+
+
+    initializeDevice();
+
     // Subscribe to pairing changes (Realtime Push)
     const pairingSubscription = DeviceService.subscribeToDevicePairing((paired, deviceInfo) => {
       setIsPaired(paired);
