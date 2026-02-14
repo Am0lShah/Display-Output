@@ -28,7 +28,7 @@ export const DevicePairing: React.FC<DevicePairingProps> = ({ onPaired }) => {
         const { supabase } = await import('../services/supabaseClient');
 
         // Test basic connection
-        const { data: testData, error: testError } = await supabase
+        const { error: testError } = await supabase
           .from('devices')
           .select('count')
           .limit(1);
@@ -97,7 +97,7 @@ export const DevicePairing: React.FC<DevicePairingProps> = ({ onPaired }) => {
       try {
         const paired = await DeviceService.isDevicePaired();
         console.log('Checking pairing status:', { paired, currentIsPaired: isPaired });
-        
+
         if (paired !== isPaired) {
           if (paired) {
             const deviceInfo = await DeviceService.getDeviceInfo();
@@ -162,7 +162,7 @@ export const DevicePairing: React.FC<DevicePairingProps> = ({ onPaired }) => {
     // Subscribe to real-time pairing updates
     const subscription = DeviceService.subscribeToDevicePairing((paired, deviceInfo) => {
       console.log('Real-time pairing update:', { paired, deviceInfo });
-      
+
       if (paired !== isPaired) {
         setIsPaired(paired);
         if (paired && deviceInfo) {
@@ -207,7 +207,7 @@ export const DevicePairing: React.FC<DevicePairingProps> = ({ onPaired }) => {
         <p style={styles.pairedSubtext}>
           Ready to receive content from your mobile app
         </p>
-        
+
         {/* Debug buttons for testing */}
         <div style={styles.debugSection}>
           <button
@@ -237,7 +237,7 @@ export const DevicePairing: React.FC<DevicePairingProps> = ({ onPaired }) => {
             🔄 Reload App
           </button>
         </div>
-        
+
         <div style={styles.loadingDots}>
           <span>●</span>
           <span>●</span>

@@ -16,7 +16,7 @@ function App() {
 
 function AppContent() {
   const { device, isPaired, isOnline, loading, handlePaired } = useDeviceStatus();
-  const { content, loading: contentLoading, error } = useContentSubscription(isPaired);
+  const { content, loading: contentLoading } = useContentSubscription(isPaired);
 
   // Disable context menu and other kiosk mode features
   useEffect(() => {
@@ -77,18 +77,18 @@ function AppContent() {
   // Show content display when paired
   return (
     <div className="app">
-      <ContentDisplay 
-        content={content} 
-        deviceName={device?.device_name || 'Pi Display'} 
+      <ContentDisplay
+        content={content}
+        deviceName={device?.device_name || 'Pi Display'}
       />
-      
+
       {/* Subtle Offline Indicator */}
       {!isOnline && (
         <div className="offline-indicator">
           <span>🔴 Offline Mode</span>
         </div>
       )}
-      
+
       {/* Content Loading Indicator */}
       {contentLoading && (
         <div className="content-loading">
