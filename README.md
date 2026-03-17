@@ -149,6 +149,35 @@ For support and questions:
 - Review console logs for errors
 - Contact the development team
 
+## 🔌 Offline Mode & Raspberry Pi Setup
+
+This project supports a robust Offline Mode where the Raspberry Pi creates its own Hotspot when no internet is available, and serves content from a local server.
+
+### 📦 Quick Start on Raspberry Pi
+
+1.  **Flash OS**: Install **Raspberry Pi OS (32-bit)** on your SD card.
+2.  **Transfer Files**: Copy the `raspberry-pi-display` folder to your Pi (e.g., `~/pi-display`).
+3.  **Run Setup Script**:
+    ```bash
+    cd ~/pi-display/scripts
+    chmod +x setup-pi.sh
+    ./setup-pi.sh
+    ```
+    This script will install Node.js, PM2, and necessary network tools.
+4.  **Reboot**: `sudo reboot`
+
+### 🚀 Automatic Startup
+
+The system is configured to start automatically on boot. Key scripts located in `scripts/`:
+- **`startup.sh`**: Launches the Network Manager, Offline Server, React App, and Kiosk Browser.
+- **`autohotspot.sh`**: Checks for internet. If missing, creates a Hotspot named **"random"** (Open).
+
+### 📱 Android Integration
+
+Use the `OfflineClient` module in your Android app to communicate with the Pi when connected to the "random" hotspot.
+- **Hotspot IP**: `10.42.0.1`
+- **Offline Server Port**: `3001`
+
 ---
 
 **PiBoard Digital Signage** - Transforming communication through innovative display technology 🚀

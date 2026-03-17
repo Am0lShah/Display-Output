@@ -10,6 +10,46 @@
   50% { opacity: 0.5; }
 }
 
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrolling Layout: marquee text upward ── */
+@keyframes scrollUp {
+  0% { transform: translateY(100vh); }
+  100% { transform: translateY(-100%); }
+}
+
+@keyframes scrollUpSlow {
+  0% { transform: translateY(50vh); }
+  100% { transform: translateY(-100%); }
+}
+
+/* ── Cinematic Layout: scale-in fade ── */
+@keyframes cinematicFadeIn {
+  from { opacity: 0; transform: scale(1.05); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cinematicTextReveal {
+  from { opacity: 0; transform: translateY(20px); letter-spacing: 0.3em; }
+  to { opacity: 1; transform: translateY(0); letter-spacing: 0.05em; }
+}
+
+/* ── Clean Layout: subtle fade ── */
+@keyframes cleanFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Navigation */
 .navigation:hover {
   opacity: 1 !important;
 }
@@ -54,6 +94,29 @@
 /* Progress bar animation */
 .progress-fill {
   animation: progress linear forwards;
+}
+
+/* ── Scrolling text container ── */
+.scroll-text-container {
+  animation: scrollUp linear infinite;
+}
+
+.scroll-text-slow {
+  animation: scrollUpSlow 20s linear infinite;
+}
+
+/* ── Cinematic animations ── */
+.cinematic-image {
+  animation: cinematicFadeIn 1.5s ease-out forwards;
+}
+
+.cinematic-text {
+  animation: cinematicTextReveal 1.2s ease-out forwards;
+}
+
+/* ── Clean animation ── */
+.clean-fade {
+  animation: cleanFadeIn 0.8s ease-out forwards;
 }
 
 /* Responsive design */

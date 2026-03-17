@@ -1,0 +1,126 @@
+====================================================
+  PiBoard Display - Raspberry Pi Terminal Commands
+====================================================
+  Hotspot Name : PiBoardHotspot
+  Hotspot Pass : piboard123
+  Pi IP Address: 10.87.134.21
+  Display URL  : http://localhost:3000
+  Server URL   : http://localhost:3001
+====================================================
+
+----------------------------------------------------
+STEP 1: Copy Pi Board zip from USB Pendrive to Pi
+----------------------------------------------------
+# First, find your pendrive mount path:
+ls /media/$USER/
+
+# Then copy the zip file (replace PENDRIVE with your drive name):
+cp /media/$USER/PENDRIVE/pi-board-display.zip ~/
+
+----------------------------------------------------
+STEP 2: Extract the zip
+----------------------------------------------------
+cd ~
+unzip pi-board-display.zip
+cd pi-board-display
+
+----------------------------------------------------
+STEP 3: Make scripts executable
+----------------------------------------------------
+chmod +x setup-pi.sh
+chmod +x autostart.sh
+
+----------------------------------------------------
+STEP 4: Run the setup (first time only)
+----------------------------------------------------
+./setup-pi.sh
+
+# This does:
+#  - Installs Node.js 18 if not already installed
+#  - Installs offline server npm packages
+#  - Installs 'serve' for static React hosting
+#  - Starts offline server on port 3001
+#  - Starts React display on port 3000
+#  - Opens Firefox at http://localhost:3000
+
+----------------------------------------------------
+STEP 5 (Optional): Set up auto-start on boot
+----------------------------------------------------
+./autostart.sh
+
+# After this, PiBoard starts automatically on boot.
+# To disable:  rm ~/.config/autostart/piboard.desktop
+
+----------------------------------------------------
+MANUAL COMMANDS (if setup-pi.sh doesn't work)
+----------------------------------------------------
+
+# Install Node.js manually:
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node --version
+
+# Install serve:
+sudo npm install -g serve
+
+# Install server dependencies:
+cd ~/pi-board-display/server
+npm install
+
+# Start offline server (in background):
+cd ~/pi-board-display/server
+nohup node server.js > /tmp/piboard-server.log 2>&1 &
+
+# Start display app (in background):
+cd ~/pi-board-display
+nohup serve -s build -l 3000 > /tmp/piboard-display.log 2>&1 &
+
+# Open Firefox:
+firefox-esr http://localhost:3000
+
+----------------------------------------------------
+USEFUL COMMANDS
+----------------------------------------------------
+
+# Check if server is running:
+curl http://localhost:3001/api/status
+
+# Check server logs:
+cat /tmp/piboard-server.log
+
+# Check display logs:
+cat /tmp/piboard-display.log
+
+# Stop all PiBoard services:
+pkill -f "node server.js"
+pkill -f "serve -s build"
+
+# Restart everything:
+./setup-pi.sh
+
+# See Pi IP address (when connected to PiBoardHotspot):
+hostname -I
+
+# Check what's running on ports:
+sudo netstat -tlnp | grep -E '3000|3001'
+
+----------------------------------------------------
+ONLINE MODE (Supabase)
+----------------------------------------------------
+- When Pi is connected to ANY internet WiFi:
+  Supabase real-time push works automatically
+- Content pushed from phone app appears instantly
+- No extra configuration needed
+
+----------------------------------------------------
+OFFLINE MODE (PiBoardHotspot)
+----------------------------------------------------
+1. On your phone: Turn on Personal Hotspot
+   Name: PiBoardHotspot  Pass: piboard123
+2. On Pi: Connect to PiBoardHotspot WiFi
+3. Pi gets IP: 10.87.134.21
+4. On phone app: Go to Offline Mode screen
+   Enter IP: 10.87.134.21 → Connect → Send content
+5. Pi display updates within ~3 seconds
+
+====================================================

@@ -14,6 +14,7 @@ export interface Device {
   user_id: string | null;
   is_online: boolean;
   last_seen: string;
+  display_layout?: string;
   wifi_ssid?: string;
   ip_address?: string;
   mac_address?: string;

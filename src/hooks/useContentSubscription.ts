@@ -42,9 +42,42 @@ export const useContentSubscription = (isPaired: boolean) => {
       }
     });
 
+    // Background polling for both Online & Offline updates
+    // This runs every 3 seconds to catch changes instantly, especially for offline deletion
+    const pollInterval = setInterval(async () => {
+        try {
+          // Robustly get both online and offline content merged
+          const freshContent = await ContentService.getDeviceContent();
+          
+          setContent(prevContent => {
+            // Compare stringified versions to detect changes (including empty lists)
+            const prevStr = JSON.stringify(prevContent);
+            const freshStr = JSON.stringify(freshContent);
+            
+            if (prevStr !== freshStr) {
+              console.log('🔄 Content Change Detected (Poll):', freshContent.length, 'items');
+              
+              if (freshContent.length > 0) {
+                ContentService.cacheContent(freshContent);
+                ContentService.preloadMedia(freshContent);
+                return freshContent;
+              } else {
+                // Handle empty list (all items deleted)
+                localStorage.removeItem('cached_content');
+                return ContentService.getDefaultContent();
+              }
+            }
+            return prevContent;
+          });
+        } catch (err) {
+          // Silent catch for polling robustness
+        }
+    }, 3000);
+
     return () => {
       console.log('🔌 Cleaning up subscriptions...');
       subscription.unsubscribe();
+      clearInterval(pollInterval);
     };
   }, [isPaired]);
 

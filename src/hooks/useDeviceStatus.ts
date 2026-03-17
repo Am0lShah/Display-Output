@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DeviceService } from '../services/deviceService';
-import { Device } from '../services/supabaseClient';
+import { Device, supabase } from '../services/supabaseClient';
 
 export const useDeviceStatus = () => {
   const [device, setDevice] = useState<Device | null>(null);
@@ -33,8 +33,6 @@ export const useDeviceStatus = () => {
       }
     };
 
-
-
     initializeDevice();
 
     // Subscribe to pairing changes (Realtime Push)
@@ -47,12 +45,39 @@ export const useDeviceStatus = () => {
       }
     });
 
+    // Subscribe to layout-changed Broadcast
+    const deviceId = DeviceService.getDeviceId();
+    const layoutChannelName = `device-notify-${deviceId}`;
+    const layoutChannel = supabase.channel(layoutChannelName);
+
+    layoutChannel.on(
+      'broadcast',
+      { event: 'layout-updated' },
+      async (payload) => {
+        console.log('🎨 Layout changed via broadcast:', payload);
+        // Refetch device info to get the latest display_layout
+        try {
+          const deviceInfo = await DeviceService.getDeviceInfo();
+          if (deviceInfo) {
+            setDevice(deviceInfo);
+            console.log('🎨 Updated device layout to:', deviceInfo.display_layout);
+          }
+        } catch (err) {
+          console.error('Error refetching device info after layout change:', err);
+        }
+      }
+    );
+
+    layoutChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('🎨 Layout broadcast listener active');
+      }
+    });
+
     // Update device status (Heartbeat) periodically
-    // We ONLY send the heartbeat here, we do NOT check for pairing status (GET request)
     const statusInterval = setInterval(() => {
-      // Use the optimized updateStatus defined outside
       updateStatus();
-    }, 60000); // Increased to 60 seconds to save API calls
+    }, 60000);
 
     // Handle page visibility changes
     const handleVisibilityChange = () => {
@@ -80,6 +105,7 @@ export const useDeviceStatus = () => {
     return () => {
       clearInterval(statusInterval);
       pairingSubscription.unsubscribe();
+      layoutChannel.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -91,10 +117,13 @@ export const useDeviceStatus = () => {
     try {
       if (navigator.onLine) {
         await DeviceService.updateDeviceStatus(true);
-        // Pairing check removed - handled by Realtime subscription
+        setIsOnline(true);
+      } else {
+        setIsOnline(false);
       }
     } catch (error) {
-      console.error('Error updating device status:', error);
+      console.error('Error updating device status (likely offline):', error);
+      setIsOnline(false);
     }
   };
 
@@ -111,4 +140,4 @@ export const useDeviceStatus = () => {
     handlePaired,
     updateStatus,
   };
-};
+};

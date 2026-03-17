@@ -5,37 +5,90 @@ export class ContentService {
   // Get content for current device
   static async getDeviceContent(): Promise<Content[]> {
     const deviceId = DeviceService.getDeviceId();
+    console.log('Fetching content for device:', deviceId);
 
     try {
-      console.log('Fetching content for device:', deviceId);
+      let allContent: Content[] = [];
+      const contentMap = new Map<string, Content>();
 
-      const { data, error } = await supabase
-        .from('device_content')
-        .select(`
-          *,
-          content (*)
-        `)
-        .eq('device_id', deviceId)
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
-
-      if (error) {
-        console.error('Supabase error fetching device content:', error);
-        throw error;
+      // 1. Fetch from Local Offline Server
+      try {
+        const offlineContent = await this.getOfflineContent();
+        if (offlineContent && offlineContent.length > 0) {
+          console.log('📡 Fetched Offline Content:', offlineContent.length);
+          offlineContent.forEach(item => contentMap.set(item.id, item));
+        }
+      } catch (offlineError) {
+        // Local server unreachable, ignore
       }
 
-      console.log('Raw device content data:', data);
+      // 2. Fetch from Supabase (Online)
+      try {
+        const { data, error } = await supabase
+          .from('device_content')
+          .select(`
+            *,
+            content (*)
+          `)
+          .eq('device_id', deviceId)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true });
 
-      const content = data
-        ?.map(item => item.content)
-        .filter(Boolean) as Content[] || [];
+        if (!error && data) {
+          console.log('☁️ Fetched Supabase Content:', data.length);
+          data.forEach(item => {
+            if (item.content) {
+              contentMap.set(item.content.id, item.content);
+            }
+          });
+        }
+      } catch (onlineError) {
+        // Offline or Supabase error
+      }
 
-      console.log('Processed content for display:', content);
+      // 3. Merge and Sort by Timestamp (Newest First)
+      allContent = Array.from(contentMap.values());
+      
+      if (allContent.length > 0) {
+        allContent.sort((a, b) => {
+          const dateA = new Date(a.created_at || 0).getTime();
+          const dateB = new Date(b.created_at || 0).getTime();
+          return dateB - dateA; // Newest first
+        });
+        
+        console.log('✅ Synchronized Content Ready:', allContent.length, 'items');
+        return allContent;
+      }
 
-      return content;
-    } catch (error) {
-      console.error('Error fetching device content:', error);
       return [];
+
+    } catch (error) {
+      console.error('Error fetching content:', error);
+      return [];
+    }
+  }
+
+  // Fetch content from local Node.js server (Offline Mode)
+  static async getOfflineContent(): Promise<Content[]> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout for local server
+
+      const response = await fetch('http://10.87.134.21:3001/api/content', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Offline server returned ${response.status}`);
+      }
+
+      const content = await response.json();
+      // Ensure content matches Content interface
+      return Array.isArray(content) ? content : [];
+    } catch (error) {
+      // console.warn('Offline server unreachable:', error);
+      throw error;
     }
   }
 
@@ -45,19 +98,19 @@ export class ContentService {
 
     console.log('🔔 Setting up real-time subscription for device:', deviceId);
 
-    // Create a unique channel for this device
-    const channelName = `content-updates-${deviceId}-${Date.now()}`;
-    const channel = supabase.channel(channelName);
+    // Create a unique channel for postgres_changes (device_content table only)
+    const pgChannelName = `content-updates-${deviceId}-${Date.now()}`;
+    const pgChannel = supabase.channel(pgChannelName);
 
     let debounceTimer: NodeJS.Timeout | null = null;
 
-    const fetchAndCallback = () => {
+    const fetchAndCallback = (source: string) => {
       if (debounceTimer) clearTimeout(debounceTimer);
 
       debounceTimer = setTimeout(async () => {
         try {
           const content = await this.getDeviceContent();
-          console.log('📦 Realtime Update: Fetched specific content:', content.length, 'items');
+          console.log(`📦 [${source}] Fetched content:`, content.length, 'items');
           callback(content);
         } catch (error) {
           console.error('❌ Error fetching content after update:', error);
@@ -65,12 +118,9 @@ export class ContentService {
       }, 500); // Debounce for 500ms
     };
 
-    // Listen for CHANGES to the link table (device_content)
-    // This handles:
-    // 1. Content added to device (INSERT)
-    // 2. Content removed from device (DELETE)
-    // 3. Order changed or Active status changed (UPDATE)
-    channel.on(
+    // Listen for CHANGES to device_content table (filtered to this device only)
+    // This fires when content is added/removed/reordered for this device
+    pgChannel.on(
       'postgres_changes',
       {
         event: '*',
@@ -79,51 +129,56 @@ export class ContentService {
         filter: `device_id=eq.${deviceId}`,
       },
       (payload) => {
-        console.log('🔄 Device Content Change:', payload.eventType);
-        fetchAndCallback();
+        console.log('🔄 Device Content Change (postgres_changes):', payload.eventType);
+        fetchAndCallback('postgres_changes');
       }
     );
 
-    // Listen for CHANGES to the actual content (title, file_url, etc.)
-    // We only care if the content items LINKED to this device are updated.
-    // However, Supabase RLS limits what we see. 
-    // Optimization: Only listen for UPDATE (unlikely to need INSERT/DELETE here as that's handled by device_content usually)
-    // But if a user deletes a content item globally, it cascades.
-    channel.on(
-      'postgres_changes',
-      {
-        event: '*', // Listen to all, but Filter logic is hard without join.
-        schema: 'public',
-        table: 'content',
-      },
-      (payload) => {
-        // Optimization: We could check if the ID is in our current list, but for now, 
-        // let's just refresh. The excessive load came from polling, not this.
-        // And since we debounce, multiple updates won't kill us.
-        console.log('📝 Global Content Change:', payload.eventType);
-        fetchAndCallback();
-      }
-    );
-
-    // Subscribe and handle connection status
-    const subscription = channel.subscribe((status, err) => {
-      console.log('🔗 Subscription status:', status);
+    // Subscribe to postgres_changes channel
+    pgChannel.subscribe((status, err) => {
+      console.log('🔗 Postgres Changes subscription status:', status);
       if (err) {
-        console.error('❌ Subscription error:', err);
+        console.error('❌ Postgres Changes subscription error:', err);
       }
-
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Real-time subscription active for device:', deviceId);
-      } else if (status === 'CHANNEL_ERROR') {
-        console.error('❌ Channel error - attempting to reconnect...');
-        // Attempt to reconnect after a delay
-        setTimeout(() => {
-          this.subscribeToContentUpdates(callback);
-        }, 5000);
+        console.log('✅ Postgres Changes subscription active for device:', deviceId);
       }
     });
 
-    return subscription;
+    // === Broadcast Channel (lightweight fallback) ===
+    // The Android app sends a broadcast message when content is pushed.
+    // This works even if postgres_changes publication isn't set up.
+    // Zero extra DB queries — just a WebSocket message.
+    const broadcastChannelName = `device-notify-${deviceId}`;
+    const broadcastChannel = supabase.channel(broadcastChannelName);
+
+    broadcastChannel.on(
+      'broadcast',
+      { event: 'content-updated' },
+      (payload) => {
+        console.log('📡 Broadcast received: content-updated', payload);
+        fetchAndCallback('broadcast');
+      }
+    );
+
+    broadcastChannel.subscribe((status, err) => {
+      console.log('🔗 Broadcast subscription status:', status);
+      if (err) {
+        console.error('❌ Broadcast subscription error:', err);
+      }
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Broadcast subscription active on channel:', broadcastChannelName);
+      }
+    });
+
+    // Return a combined unsubscribe object
+    return {
+      unsubscribe: () => {
+        console.log('🔌 Unsubscribing from all channels...');
+        pgChannel.unsubscribe();
+        broadcastChannel.unsubscribe();
+      },
+    };
   }
 
   // Cache content for offline use
