@@ -1,5 +1,6 @@
 # Dependencies
 /node_modules
+node_modules/
 /.pnp
 .pnp.js
 
@@ -8,6 +9,10 @@
 
 # Production
 /build
+
+# Server runtime data (generated at runtime on Pi)
+server/data/
+server/uploads/
 
 # Misc
 .DS_Store
