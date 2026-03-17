@@ -8,7 +8,7 @@ node_modules/
 /coverage
 
 # Production
-/build
+# /build  <- intentionally committed so Raspberry Pi can serve it directly
 
 # Server runtime data (generated at runtime on Pi)
 server/data/

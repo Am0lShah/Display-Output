@@ -102,7 +102,7 @@ export class ContentService {
     const pgChannelName = `content-updates-${deviceId}-${Date.now()}`;
     const pgChannel = supabase.channel(pgChannelName);
 
-    let debounceTimer: NodeJS.Timeout | null = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const fetchAndCallback = (source: string) => {
       if (debounceTimer) clearTimeout(debounceTimer);
