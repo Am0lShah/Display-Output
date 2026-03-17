@@ -16,7 +16,21 @@ function App() {
 
 function AppContent() {
   const { device, isPaired, isOnline, loading, handlePaired } = useDeviceStatus();
-  const { content, loading: contentLoading, error } = useContentSubscription(isPaired);
+  const { content, loading: contentLoading } = useContentSubscription(isPaired);
+  const [showOfflinePopup, setShowOfflinePopup] = React.useState(false);
+
+  // Handle Offline Popup Logic
+  useEffect(() => {
+    if (!isOnline) {
+      setShowOfflinePopup(true);
+      const timer = setTimeout(() => {
+        setShowOfflinePopup(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowOfflinePopup(false);
+    }
+  }, [isOnline]);
 
   // Disable context menu and other kiosk mode features
   useEffect(() => {
@@ -77,18 +91,19 @@ function AppContent() {
   // Show content display when paired
   return (
     <div className="app">
-      <ContentDisplay 
-        content={content} 
-        deviceName={device?.device_name || 'Pi Display'} 
+      <ContentDisplay
+        content={content}
+        deviceName={device?.device_name || 'Pi Display'}
+        displayLayout={device?.display_layout || 'standard'}
       />
-      
-      {/* Subtle Offline Indicator */}
-      {!isOnline && (
+
+      {/* Offline Mode Popup (5 Seconds) */}
+      {showOfflinePopup && (
         <div className="offline-indicator">
           <span>🔴 Offline Mode</span>
         </div>
       )}
-      
+
       {/* Content Loading Indicator */}
       {contentLoading && (
         <div className="content-loading">

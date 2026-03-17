@@ -18,14 +18,14 @@ export const useContentSubscription = (isPaired: boolean) => {
 
     console.log('Device is paired, loading content...');
     loadContent();
-    
+
     // Subscribe to real-time updates
     const subscription = ContentService.subscribeToContentUpdates((newContent) => {
       console.log('🔔 Received content update via subscription:', newContent);
-      
+
       setLoading(false);
       setError(null);
-      
+
       if (newContent.length > 0) {
         console.log('✅ Setting user content from subscription:', newContent.length, 'items');
         setContent(newContent);
@@ -41,27 +41,38 @@ export const useContentSubscription = (isPaired: boolean) => {
         localStorage.removeItem('cache_timestamp');
       }
     });
-    
-    // Fallback polling every 30 seconds as backup
+
+    // Background polling for both Online & Offline updates
+    // This runs every 3 seconds to catch changes instantly, especially for offline deletion
     const pollInterval = setInterval(async () => {
-      try {
-        console.log('🔄 Fallback polling for content updates...');
-        const currentContent = await ContentService.getDeviceContent();
-        
-        // Only update if content actually changed
-        if (JSON.stringify(currentContent) !== JSON.stringify(content)) {
-          console.log('📦 Polling detected content change, updating...');
-          if (currentContent.length > 0) {
-            setContent(currentContent);
-            ContentService.cacheContent(currentContent);
-          } else {
-            setContent(ContentService.getDefaultContent());
-          }
+        try {
+          // Robustly get both online and offline content merged
+          const freshContent = await ContentService.getDeviceContent();
+          
+          setContent(prevContent => {
+            // Compare stringified versions to detect changes (including empty lists)
+            const prevStr = JSON.stringify(prevContent);
+            const freshStr = JSON.stringify(freshContent);
+            
+            if (prevStr !== freshStr) {
+              console.log('🔄 Content Change Detected (Poll):', freshContent.length, 'items');
+              
+              if (freshContent.length > 0) {
+                ContentService.cacheContent(freshContent);
+                ContentService.preloadMedia(freshContent);
+                return freshContent;
+              } else {
+                // Handle empty list (all items deleted)
+                localStorage.removeItem('cached_content');
+                return ContentService.getDefaultContent();
+              }
+            }
+            return prevContent;
+          });
+        } catch (err) {
+          // Silent catch for polling robustness
         }
-      } catch (error) {
-        console.error('❌ Polling error:', error);
-      }
-    }, 30000); // Poll every 30 seconds
+    }, 3000);
 
     return () => {
       console.log('🔌 Cleaning up subscriptions...');
@@ -74,13 +85,13 @@ export const useContentSubscription = (isPaired: boolean) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log('Loading content for paired device...');
-      
+
       // Get fresh content directly (no fallback logic here, let subscription handle updates)
       const freshContent = await ContentService.getDeviceContent();
       console.log('Initial content load:', freshContent);
-      
+
       if (freshContent.length > 0) {
         console.log('Setting initial user content:', freshContent.length, 'items');
         setContent(freshContent);
@@ -93,7 +104,7 @@ export const useContentSubscription = (isPaired: boolean) => {
     } catch (err) {
       console.error('Error loading initial content:', err);
       setError('Failed to load content');
-      
+
       // Try cached content as fallback
       const cachedContent = ContentService.getCachedContent();
       if (cachedContent.length > 0 && ContentService.isCacheValid()) {
@@ -121,7 +132,7 @@ export const useContentSubscription = (isPaired: boolean) => {
         loadContent();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
